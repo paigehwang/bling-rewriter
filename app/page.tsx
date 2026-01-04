@@ -14,6 +14,7 @@ type CenterOption = {
 type SourcePostOption = {
   title: string;
   pcUrl: string;
+  service?: string; // ✅ 추가 (API가 내려주면 보관용)
 };
 
 type ParsedOutput = {
@@ -21,6 +22,12 @@ type ParsedOutput = {
   body: string;
   raw: string;
 };
+
+/* =====================
+   Services (J열 분기)
+===================== */
+const SERVICES = ["주간보호", "방문요양", "가족요양", "장기요양등급", "요양보호사"] as const;
+type ServiceType = (typeof SERVICES)[number];
 
 /* =====================
    Utils
@@ -100,6 +107,7 @@ export default function Page() {
 
   const [centerId, setCenterId] = useState(""); // 빈 값이면 "선택해주세요" 상태
   const [keyword1, setKeyword1] = useState("");
+  const [service, setService] = useState<ServiceType | "">(""); // ✅ 추가
   const [sourcePcUrl, setSourcePcUrl] = useState(""); // 빈 값이면 "선택해주세요" 상태
 
   const [centersErr, setCentersErr] = useState("");
@@ -114,8 +122,9 @@ export default function Page() {
   const [copiedBody, setCopiedBody] = useState(false);
 
   const canSubmit = useMemo(() => {
-    return Boolean(centerId && keyword1.trim() && sourcePcUrl);
-  }, [centerId, keyword1, sourcePcUrl]);
+    // ✅ 서비스도 선택되어야 submit 가능
+    return Boolean(centerId && keyword1.trim() && service && sourcePcUrl);
+  }, [centerId, keyword1, service, sourcePcUrl]);
 
   const titleList = useMemo(() => {
     return parsed.titles
@@ -191,7 +200,6 @@ export default function Page() {
         }
 
         // ✅ 기본 선택값 자동 지정하지 않음 (placeholder를 기본으로 유지)
-        // setCenterId(cleaned[0].centerId);
       } catch (e: any) {
         if (!cancelled) setCentersErr(e?.message ?? "centers fetch error");
       }
@@ -203,16 +211,23 @@ export default function Page() {
   }, []);
 
   /* =====================
-     Fetch source posts (robust)
+     Fetch source posts (서비스 선택 후)
   ===================== */
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
+        // 서비스 바뀌면 원고/선택 초기화
+        setSources([]);
+        setSourcePcUrl("");
         setSourcesErr("");
 
-        const res = await fetch("/api/source-posts?limit=400", { cache: "no-store" });
+        if (!service) return; // ✅ 서비스 선택 전이면 아무것도 안 불러옴
+
+        const res = await fetch(`/api/source-posts?limit=400&service=${encodeURIComponent(service)}`, {
+          cache: "no-store",
+        });
         const json = await res.json();
 
         if (!res.ok) {
@@ -235,18 +250,18 @@ export default function Page() {
           .map((p: any) => ({
             title: (p?.title ?? "").toString().trim(),
             pcUrl: (p?.pcUrl ?? p?.url ?? p?.link ?? "").toString().trim(),
+            service: (p?.service ?? "").toString().trim(),
           }))
-          .filter((p) => p.title && p.pcUrl);
+          .filter((p) => p.title && p.pcUrl); // ✅ service는 서버에서 이미 빈값 제외 처리
 
         if (!cancelled) setSources(cleaned);
 
         if (!cleaned.length) {
-          if (!cancelled) setSourcesErr("원본 원고 목록이 0개예요. (posts_full 컬럼/범위 확인 필요)");
+          if (!cancelled) setSourcesErr("해당 카테고리에 원본 원고가 0개예요. (posts_full J열 값 확인 필요)");
           return;
         }
 
         // ✅ 기본 선택값 자동 지정하지 않음 (placeholder 유지)
-        // setSourcePcUrl(cleaned[0].pcUrl);
       } catch (e: any) {
         if (!cancelled) setSourcesErr(e?.message ?? "source-posts fetch error");
         if (!cancelled) setSources([]);
@@ -256,7 +271,7 @@ export default function Page() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [service]);
 
   /* =====================
      Generate
@@ -266,7 +281,7 @@ export default function Page() {
     setParsed({ titles: "", body: "", raw: "" });
 
     if (!canSubmit) {
-      setError("센터/키워드/참고 포스팅을 모두 선택해 주세요.");
+      setError("센터/키워드/카테고리/참고 포스팅을 모두 선택해 주세요.");
       return;
     }
 
@@ -348,11 +363,35 @@ export default function Page() {
               />
             </Field>
 
+            {/* ✅ 카테고리(서비스) 선택 - 추가 (UI 스타일 그대로) */}
+            <Field label="카테고리 선택" desc="">
+              <select className={inputClass} value={service} onChange={(e) => setService(e.target.value as any)}>
+                <option value="">카테고리를 선택해주세요</option>
+                {SERVICES.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </Field>
+
             {/* 원본 원고 (가로로 길게) */}
             <div className="md:col-span-2">
               <Field label="변형할 원고 선택" desc="지역명은 우리 센터에 맞게 알아서 변경됩니다!">
-                <select className={inputClass} value={sourcePcUrl} onChange={(e) => setSourcePcUrl(e.target.value)}>
-                  <option value="">{sources.length ? "참고할 포스팅을 선택해주세요" : "포스팅 불러오는 중..."}</option>
+                <select
+                  className={inputClass}
+                  value={sourcePcUrl}
+                  onChange={(e) => setSourcePcUrl(e.target.value)}
+                  disabled={!service}
+                >
+                  <option value="">
+                    {!service
+                      ? "먼저 카테고리를 선택해주세요"
+                      : sources.length
+                      ? "참고할 포스팅을 선택해주세요"
+                      : "포스팅 불러오는 중..."}
+                  </option>
+
                   {sources.map((p) => (
                     <option key={p.pcUrl} value={p.pcUrl}>
                       {p.title}

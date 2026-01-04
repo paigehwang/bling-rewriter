@@ -2,9 +2,6 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
 
-/* =====================
-   Google Sheets Client
-===================== */
 function getSheetsClient() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL!;
   const key = (
@@ -29,23 +26,18 @@ async function getValues(sheets: any, spreadsheetId: string, range: string) {
   return (res.data.values ?? []) as string[][];
 }
 
-function normalize(s: any) {
-  return (s ?? "").toString().trim();
+function normalize(v: any) {
+  return (v ?? "").toString().trim();
 }
 
-/**
- * posts_full!A:F 가정 (너 말 기준)
- * - B(1): title
- * - C(2): pcUrl  ✅ 고유키로 사용
- * - D(3): mobileUrl (비어있음)
- * - F(5): contentText
- */
-const RANGE_POSTS = "posts_full!A:F";
+// posts_full: B=title(1), C=pcUrl(2), J=service(9)
+const RANGE_POSTS = "posts_full!A:J";
 
 export async function GET(req: Request) {
   try {
     const url = new URL(req.url);
-    const limit = Math.min(Number(url.searchParams.get("limit") ?? "200") || 200, 500);
+    const limit = Math.min(Number(url.searchParams.get("limit") ?? 400), 800);
+    const service = normalize(url.searchParams.get("service") ?? "");
 
     const spreadsheetId = process.env.GOOGLE_SHEET_ID || process.env.GOOGLE_SHEETS_ID;
     if (!spreadsheetId) {
@@ -56,15 +48,20 @@ export async function GET(req: Request) {
     const rows = await getValues(sheets, spreadsheetId, RANGE_POSTS);
     const data = rows.slice(1);
 
-    const sliced = data.slice(-limit).reverse();
-
-    const items = sliced
+    let items = data
       .map((r) => {
-        const title = normalize(r[1]); // B
-        const pcUrl = normalize(r[2]); // C
-        return { title, pcUrl };
+        const title = normalize(r[1]);
+        const pcUrl = normalize(r[2]);
+        const svc = normalize(r[9]); // ✅ J열 (카테고리/서비스)
+        return { title, pcUrl, service: svc };
       })
-      .filter((x) => x.title && x.pcUrl);
+      // ✅ J열 비어있으면 그냥 넘어감(리스트에서 제외)
+      .filter((x) => x.title && x.pcUrl && x.service);
+
+    if (service) items = items.filter((x) => x.service === service);
+
+    // 최신글이 아래로 쌓인다고 가정 → 뒤에서부터 limit개
+    items = items.slice(-limit).reverse();
 
     return NextResponse.json({ ok: true, items });
   } catch (err: any) {
