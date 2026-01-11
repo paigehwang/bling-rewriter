@@ -221,12 +221,12 @@ export async function POST(req: Request) {
     /* 4) Prompt 구성 */
     const voiceBlock = isRecruitment
       ? `
-[화자: ${centerName} 채용 담당자]
+[화자: ${centerName} 센터장 혹은 사회복지사]
 - 구직 중인 요양보호사 선생님들에게 깊이 있는 정보를 제공합니다.
 - 단순 공지가 아니라, 우리 센터의 철학과 장점을 구체적으로 설명합니다.
 `.trim()
       : `
-[화자: ${centerName} 전문 상담 센터장]
+[화자: ${centerName}  센터장 혹은 사회복지사]
 - 보호자에게 단순 위로를 넘어 '전문적인 해결책'을 제시합니다.
 - 글의 호흡을 길게 가져가며, 상세하고 친절하게 설명하는 말투를 씁니다.
 `.trim();
