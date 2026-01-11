@@ -84,12 +84,9 @@ function extractSeoTitles(raw: string) {
   const lines = block
     .split("\n")
     .map((x) => x.trim())
-    // ✅ [제목 전용 강력 청소기] 
-    // 맨 앞의 공백, 별표(*), 하이픈(-), 점(•), 숫자(1.), 괄호()) 등을 싹 제거
+    // ✅ [강력 청소기] 제목 앞의 기호 싹 제거
     .map((x) => x.replace(/^[\s\*\-\•\d\.\)]+/, ""))
-    // 혹시 중간에 섞인 마크다운 볼드체(**) 제거
     .map((x) => x.replaceAll("**", "").replaceAll("__", ""))
-    // 앞뒤 따옴표 제거
     .map((x) => x.replace(/^['"]|['"]$/g, ""))
     .filter(Boolean);
   return lines.slice(0, 3);
@@ -224,12 +221,12 @@ export async function POST(req: Request) {
     /* 4) Prompt 구성 */
     const voiceBlock = isRecruitment
       ? `
-[화자: ${centerName} 센터장]
+[화자: ${centerName} 채용 담당자]
 - 구직 중인 요양보호사 선생님들에게 깊이 있는 정보를 제공합니다.
-- 단순 공지가 아니라, 우리 센터의 장점을 구체적으로 설명합니다.
+- 단순 공지가 아니라, 우리 센터의 철학과 장점을 구체적으로 설명합니다.
 `.trim()
       : `
-[화자: ${centerName} 센터장]
+[화자: ${centerName} 전문 상담 센터장]
 - 보호자에게 단순 위로를 넘어 '전문적인 해결책'을 제시합니다.
 - 글의 호흡을 길게 가져가며, 상세하고 친절하게 설명하는 말투를 씁니다.
 `.trim();
@@ -262,12 +259,15 @@ export async function POST(req: Request) {
 4) **소제목**: 소제목 4개 중 2개 이상에 ${centerName} 또는 ${regionHint}를 포함하세요.
 `.trim();
 
+    // ✅ [수정됨] 인트로 고정 (안녕하세요, OOO입니다 ❤️)
     const formatRule = `
 [출력 형식]
 <<SEO_TITLES>>
 (제목 3개)
 <<BODY>>
-(도입부: 3~4문장의 충분한 길이로 작성, 번호 붙이지 말 것)
+안녕하세요, ${centerName}입니다 ❤️
+
+(여기서부터 자연스럽게 인트로 줄글 시작, 번호 붙이지 말 것)
 
 1. {소제목 1}
 (본문: 최소 4~5문장 이상 길게 작성)
@@ -315,10 +315,10 @@ ${sourceContent}
       let retryMsg = "";
       if (attempt > 0) {
         retryMsg = "\n\n[수정 요청]";
-        retryMsg += " 1. 제목 앞에 별표(*)나 번호(1.) 같은 기호를 절대 붙이지 마세요.";
+        retryMsg += " 1. 글 시작을 반드시 '안녕하세요, " + centerName + "입니다 ❤️'로 하세요.";
         retryMsg += " 2. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (최소 1000자)";
         retryMsg += " 3. 소제목은 반드시 3개 또는 4개가 있어야 합니다.";
-        retryMsg += " 4. 키워드 '" + keyword1 + "'를 제목과 본문에 규칙대로 넣으세요.";
+        retryMsg += " 4. 제목 앞에 기호(*, 1.) 붙이지 마세요.";
       }
 
       const result = await model.generateContent(finalPrompt + retryMsg);
@@ -344,13 +344,15 @@ ${sourceContent}
       const okBody = bodyCnt >= 2 && bodyCnt <= 4; 
       const hasCenterName = raw.includes(centerName);
       const hasTel = raw.includes(tel);
-      const badIntro = raw.slice(0, 100).includes("오늘") && raw.slice(0, 100).includes("준비");
       const numberedIntro = raw.includes("<<BODY>>") && extractBody(raw).trim().startsWith("1.");
       
-      // ✅ [깊이 검증] 본문 길이가 너무 짧으면 실패 처리 (약 600자 미만이면 재시도)
       const isTooShort = bodyText.length < 600; 
 
-      if (okTok && okTitles && okBody && hasCenterName && hasTel && !badIntro && !numberedIntro && !isTooShort) {
+      // ✅ 인트로 시작 문구 체크
+      const introStart = `안녕하세요, ${centerName}입니다`;
+      const hasCorrectIntro = extractBody(raw).includes(introStart);
+
+      if (okTok && okTitles && okBody && hasCenterName && hasTel && !numberedIntro && !isTooShort && hasCorrectIntro) {
         break; 
       }
     }
