@@ -84,10 +84,13 @@ function extractSeoTitles(raw: string) {
   const lines = block
     .split("\n")
     .map((x) => x.trim())
-    // ✅ [강력 수정] 제목 앞의 모든 기호(*, -, •, 숫자, 점) 박멸
-    .map((x) => x.replace(/^[\s\*\-\•\d\.\)]+/, "")) 
-    // 혹시 글자 중간에 **가 섞여있을 수도 있으니 한번 더 제거
-    .map((x) => x.replaceAll("**", "").replaceAll("*", "")) 
+    // ✅ [제목 전용 강력 청소기] 
+    // 맨 앞의 공백, 별표(*), 하이픈(-), 점(•), 숫자(1.), 괄호()) 등을 싹 제거
+    .map((x) => x.replace(/^[\s\*\-\•\d\.\)]+/, ""))
+    // 혹시 중간에 섞인 마크다운 볼드체(**) 제거
+    .map((x) => x.replaceAll("**", "").replaceAll("__", ""))
+    // 앞뒤 따옴표 제거
+    .map((x) => x.replace(/^['"]|['"]$/g, ""))
     .filter(Boolean);
   return lines.slice(0, 3);
 }
@@ -254,8 +257,9 @@ export async function POST(req: Request) {
     const seoRule = `
 [SEO 필수 규칙 (어길 시 0점 처리)]
 1) **SEO 제목**: 출력하는 3개의 제목 모두에 목표 키워드 '${keyword1}'를 토씨 하나 틀리지 않고 그대로 포함하세요.
-2) **본문 키워드**: 본문 내용 중에 목표 키워드 '${keyword1}'가 정확히 2회~3회 등장해야 합니다.
-3) **소제목**: 소제목 4개 중 2개 이상에 ${centerName} 또는 ${regionHint}를 포함하세요.
+2) **제목 금지 사항**: 제목 앞에 번호(1.), 글머리 기호(*, -), 특수문자를 절대 붙이지 마세요. 순수 텍스트만 출력하세요.
+3) **본문 키워드**: 본문 내용 중에 목표 키워드 '${keyword1}'가 정확히 2회~3회 등장해야 합니다.
+4) **소제목**: 소제목 4개 중 2개 이상에 ${centerName} 또는 ${regionHint}를 포함하세요.
 `.trim();
 
     const formatRule = `
@@ -311,10 +315,10 @@ ${sourceContent}
       let retryMsg = "";
       if (attempt > 0) {
         retryMsg = "\n\n[수정 요청]";
-        retryMsg += " 1. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (최소 1000자)";
-        retryMsg += " 2. 소제목은 반드시 3개 또는 4개가 있어야 합니다.";
-        retryMsg += " 3. 키워드 '" + keyword1 + "'를 제목과 본문에 규칙대로 넣으세요.";
-        retryMsg += " 4. 도입부에 번호(1.) 붙이지 마세요.";
+        retryMsg += " 1. 제목 앞에 별표(*)나 번호(1.) 같은 기호를 절대 붙이지 마세요.";
+        retryMsg += " 2. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (최소 1000자)";
+        retryMsg += " 3. 소제목은 반드시 3개 또는 4개가 있어야 합니다.";
+        retryMsg += " 4. 키워드 '" + keyword1 + "'를 제목과 본문에 규칙대로 넣으세요.";
       }
 
       const result = await model.generateContent(finalPrompt + retryMsg);
@@ -343,6 +347,7 @@ ${sourceContent}
       const badIntro = raw.slice(0, 100).includes("오늘") && raw.slice(0, 100).includes("준비");
       const numberedIntro = raw.includes("<<BODY>>") && extractBody(raw).trim().startsWith("1.");
       
+      // ✅ [깊이 검증] 본문 길이가 너무 짧으면 실패 처리 (약 600자 미만이면 재시도)
       const isTooShort = bodyText.length < 600; 
 
       if (okTok && okTitles && okBody && hasCenterName && hasTel && !badIntro && !numberedIntro && !isTooShort) {
