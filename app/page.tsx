@@ -14,7 +14,7 @@ type CenterOption = {
 type SourcePostOption = {
   title: string;
   pcUrl: string;
-  service?: string; // ✅ 추가 (API가 내려주면 보관용)
+  service?: string; 
 };
 
 type ParsedOutput = {
@@ -24,7 +24,7 @@ type ParsedOutput = {
 };
 
 /* =====================
-   Services (J열 분기)
+   Services
 ===================== */
 const SERVICES = ["주간보호", "방문요양", "가족요양", "장기요양등급", "요양보호사"] as const;
 type ServiceType = (typeof SERVICES)[number];
@@ -54,24 +54,21 @@ function parseGeneratedText(raw: string): ParsedOutput {
 }
 
 /**
- * 화면 가독성용 줄바꿈 보정:
- * - 한 줄로 뭉친 경우 1.~4. 앞을 강제로 나눔
- * - 과도한 줄바꿈은 2줄까지만 유지
+ * [기능 업데이트] 화면 가독성용 줄바꿈 보정
+ * - 문장 끝(다/요/죠/까 + 마침표/물음표/느낌표) 뒤에 줄바꿈 2개 강제
  */
 function formatBodyForReadability(body: string) {
   if (!body) return "";
   let t = body.replace(/\r\n/g, "\n");
 
-  // 공백/탭 정리 (줄바꿈은 보존)
+  // 공백/탭 정리
   t = t.replace(/[ \t]+/g, " ").trim();
 
-  // 한 줄로 온 경우: 소제목(1.~4.) 앞을 강제로 나눔
-  if (!t.includes("\n")) {
-    t = t.replace(/\s([1-4]\.)\s/g, "\n\n$1 ");
-  }
+  // 문장 끝나는 지점 뒤에 줄바꿈 2개 강제 삽입
+  t = t.replace(/([다요죠까])([.?!])\s*/g, "$1$2\n\n");
 
   // 소제목 앞은 항상 2줄 띄움
-  t = t.replace(/\n(\d\.)\s*/g, "\n\n$1 ");
+  t = t.replace(/\n*(\d\.)\s*/g, "\n\n$1 ");
 
   // 과도한 줄바꿈 정리
   t = t.replace(/\n{4,}/g, "\n\n").trim();
@@ -105,10 +102,10 @@ export default function Page() {
   const [centers, setCenters] = useState<CenterOption[]>([]);
   const [sources, setSources] = useState<SourcePostOption[]>([]);
 
-  const [centerId, setCenterId] = useState(""); // 빈 값이면 "선택해주세요" 상태
+  const [centerId, setCenterId] = useState(""); 
   const [keyword1, setKeyword1] = useState("");
-  const [service, setService] = useState<ServiceType | "">(""); // ✅ 추가
-  const [sourcePcUrl, setSourcePcUrl] = useState(""); // 빈 값이면 "선택해주세요" 상태
+  const [service, setService] = useState<ServiceType | "">(""); 
+  const [sourcePcUrl, setSourcePcUrl] = useState(""); 
 
   const [centersErr, setCentersErr] = useState("");
   const [sourcesErr, setSourcesErr] = useState("");
@@ -122,14 +119,14 @@ export default function Page() {
   const [copiedBody, setCopiedBody] = useState(false);
 
   const canSubmit = useMemo(() => {
-    // ✅ 서비스도 선택되어야 submit 가능
     return Boolean(centerId && keyword1.trim() && service && sourcePcUrl);
   }, [centerId, keyword1, service, sourcePcUrl]);
 
+  // [기능 업데이트] 제목 앞 번호(1. 2. 1)) 제거 로직 적용
   const titleList = useMemo(() => {
     return parsed.titles
       .split("\n")
-      .map((t) => t.trim())
+      .map((t) => t.trim().replace(/^\d+[\.\)]\s*/, "")) 
       .filter(Boolean)
       .slice(0, 3);
   }, [parsed.titles]);
@@ -140,7 +137,7 @@ export default function Page() {
   }, [sources, sourcePcUrl]);
 
   /* =====================
-     Fetch centers (robust)
+      Fetch centers
   ===================== */
   useEffect(() => {
     let cancelled = false;
@@ -148,7 +145,6 @@ export default function Page() {
     (async () => {
       try {
         setCentersErr("");
-
         const res = await fetch("/api/centers", { cache: "no-store" });
         const json = await res.json();
 
@@ -161,69 +157,37 @@ export default function Page() {
           return;
         }
 
-        // ✅ 어떤 형태든 배열만 안전하게 꺼내기
-        const list =
-          (json?.items ??
-            json?.data ??
-            json?.centers ??
-            json?.rows ??
-            (Array.isArray(json) ? json : [])) as any[];
-
-        if (!Array.isArray(list) || list.length === 0) {
-          const keys = json && typeof json === "object" ? Object.keys(json).join(", ") : String(typeof json);
-          if (!cancelled) setCentersErr(`센터 목록을 찾지 못했어요. 응답 key: ${keys}`);
-          if (!cancelled) setCenters([]);
-          return;
-        }
-
-        const pick = (obj: any, keys: string[]) => {
-          for (const k of keys) {
-            const v = obj?.[k];
-            if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
-          }
-          return "";
-        };
-
+        const list = (json?.items ?? json?.data ?? json?.centers ?? []) as any[];
+        
         const cleaned: CenterOption[] = list
           .map((c) => ({
-            centerId: pick(c, ["centerId", "id", "센터ID", "센터 Id", "센터 아이디"]),
-            name: pick(c, ["name", "centerName", "센터명", "기관명", "운영상 기관명 (해당 셀 메모 필독)", "운영상 기관명"]),
+            centerId: c.centerId || c["센터ID"],
+            name: c.name || c.centerName,
           }))
           .filter((c) => c.centerId && c.name);
 
         if (!cancelled) setCenters(cleaned);
-
-        if (!cleaned.length) {
-          const sampleKeys = list[0] ? Object.keys(list[0]).join(", ") : "(first item 없음)";
-          if (!cancelled) setCentersErr(`센터 파싱 결과 0개예요. 첫 아이템 키: ${sampleKeys}`);
-          return;
-        }
-
-        // ✅ 기본 선택값 자동 지정하지 않음 (placeholder를 기본으로 유지)
       } catch (e: any) {
         if (!cancelled) setCentersErr(e?.message ?? "centers fetch error");
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   /* =====================
-     Fetch source posts (서비스 선택 후)
+      Fetch source posts
   ===================== */
   useEffect(() => {
     let cancelled = false;
 
     (async () => {
       try {
-        // 서비스 바뀌면 원고/선택 초기화
         setSources([]);
         setSourcePcUrl("");
         setSourcesErr("");
 
-        if (!service) return; // ✅ 서비스 선택 전이면 아무것도 안 불러옴
+        if (!service) return;
 
         const res = await fetch(`/api/source-posts?limit=400&service=${encodeURIComponent(service)}`, {
           cache: "no-store",
@@ -232,49 +196,33 @@ export default function Page() {
 
         if (!res.ok) {
           if (!cancelled) setSourcesErr(`HTTP ${res.status} - /api/source-posts`);
-          if (!cancelled) setSources([]);
           return;
         }
         if (json?.ok === false) {
           if (!cancelled) setSourcesErr(json?.error ?? "source-posts: ok=false");
-          if (!cancelled) setSources([]);
           return;
         }
 
-        const items = (json?.items ??
-          json?.data ??
-          json?.posts ??
-          (Array.isArray(json) ? json : [])) as any[];
-
-        const cleaned: SourcePostOption[] = (items || [])
+        const items = (json?.items ?? []) as any[];
+        const cleaned: SourcePostOption[] = items
           .map((p: any) => ({
             title: (p?.title ?? "").toString().trim(),
-            pcUrl: (p?.pcUrl ?? p?.url ?? p?.link ?? "").toString().trim(),
+            pcUrl: (p?.pcUrl ?? "").toString().trim(),
             service: (p?.service ?? "").toString().trim(),
           }))
-          .filter((p) => p.title && p.pcUrl); // ✅ service는 서버에서 이미 빈값 제외 처리
+          .filter((p) => p.title && p.pcUrl);
 
         if (!cancelled) setSources(cleaned);
-
-        if (!cleaned.length) {
-          if (!cancelled) setSourcesErr("해당 카테고리에 원본 원고가 0개예요. (posts_full J열 값 확인 필요)");
-          return;
-        }
-
-        // ✅ 기본 선택값 자동 지정하지 않음 (placeholder 유지)
       } catch (e: any) {
         if (!cancelled) setSourcesErr(e?.message ?? "source-posts fetch error");
-        if (!cancelled) setSources([]);
       }
     })();
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [service]);
 
   /* =====================
-     Generate
+      Generate
   ===================== */
   async function onGenerate() {
     setError("");
@@ -290,7 +238,8 @@ export default function Page() {
       const res = await fetch("/api/generate-from-sheet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ centerId, keyword1, sourcePcUrl }),
+        // [기능 업데이트] service 정보 추가 전송
+        body: JSON.stringify({ centerId, keyword1, sourcePcUrl, service }),
       });
 
       const json = await res.json();
@@ -300,8 +249,7 @@ export default function Page() {
         return;
       }
 
-      const rawText = String(json?.text ?? "");
-      setParsed(parseGeneratedText(rawText));
+      setParsed(parseGeneratedText(json?.text ?? ""));
     } catch (e: any) {
       setError(e?.message ?? "요청 중 오류가 발생했어요.");
     } finally {
@@ -319,13 +267,13 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-gradient-to-b from-rose-50 via-pink-50 to-white">
       <div className="mx-auto max-w-5xl px-6 py-10">
-        {/* 헤더 */}
+        {/* 헤더 (기존 UI 유지) */}
         <div className="mb-8">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-base font-medium text-rose-700 ring-1 ring-rose-200">
             케어링 블로그
           </div>
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight text-slate-900">
-            블링이 (블로그 작성해주는 아링이)
+            블링이 (블로그 작성해주는 아링이)✨
           </h1>
           <p className="mt-2 max-w-3xl text-lg leading-8 text-slate-600">
             기존 원고를 선택하면, 우리 센터 정보로 자연스럽게 편집·재작성된 정보성 원고가 생성돼요.
@@ -335,7 +283,6 @@ export default function Page() {
         {/* 입력 카드 */}
         <section className="rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-rose-200 backdrop-blur">
           <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {/* 센터 */}
             <Field label="센터 선택" desc="센터 정보를 기준으로 문구가 자동 반영돼요.">
               <select className={inputClass} value={centerId} onChange={(e) => setCenterId(e.target.value)}>
                 <option value="">{centers.length ? "센터를 선택해주세요" : "센터 불러오는 중..."}</option>
@@ -345,15 +292,9 @@ export default function Page() {
                   </option>
                 ))}
               </select>
-
-              {centersErr ? (
-                <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-base text-rose-700">
-                  센터 불러오기/파싱 오류: {centersErr}
-                </div>
-              ) : null}
+              {centersErr && <div className="mt-3 text-rose-700">{centersErr}</div>}
             </Field>
 
-            {/* 키워드 */}
             <Field label="목표 키워드 (1개)" desc="본문에 2~3회 자연스럽게 포함돼요.">
               <input
                 className={inputClass}
@@ -363,7 +304,6 @@ export default function Page() {
               />
             </Field>
 
-            {/* ✅ 카테고리(서비스) 선택 - 추가 (UI 스타일 그대로) */}
             <Field label="카테고리 선택" desc="">
               <select className={inputClass} value={service} onChange={(e) => setService(e.target.value as any)}>
                 <option value="">카테고리를 선택해주세요</option>
@@ -375,7 +315,6 @@ export default function Page() {
               </select>
             </Field>
 
-            {/* 원본 원고 (가로로 길게) */}
             <div className="md:col-span-2">
               <Field label="변형할 원고 선택" desc="지역명은 우리 센터에 맞게 알아서 변경됩니다!">
                 <select
@@ -391,25 +330,18 @@ export default function Page() {
                       ? "참고할 포스팅을 선택해주세요"
                       : "포스팅 불러오는 중..."}
                   </option>
-
                   {sources.map((p) => (
                     <option key={p.pcUrl} value={p.pcUrl}>
                       {p.title}
                     </option>
                   ))}
                 </select>
-
-                {sourcesErr ? (
-                  <div className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-base text-rose-700">
-                    원고 목록 불러오기/파싱 오류: {sourcesErr}
-                  </div>
-                ) : null}
-
-                {selectedSourceTitle ? (
+                {sourcesErr && <div className="mt-3 text-rose-700">{sourcesErr}</div>}
+                {selectedSourceTitle && (
                   <p className="mt-2 text-base text-slate-600">
                     선택됨: <span className="font-semibold text-slate-800">{selectedSourceTitle}</span>
                   </p>
-                ) : null}
+                )}
               </Field>
             </div>
           </div>
@@ -426,14 +358,15 @@ export default function Page() {
                 "focus:outline-none focus:ring-4 focus:ring-rose-200",
               ].join(" ")}
             >
-              {loading ? "생성 중..." : "원고 생성하기"}
+              {/* [요청하신 문구로 변경 완료] */}
+              {loading ? "블링이가 원고를 열심히 작성하고 있어요...✨ (약 30-40초)" : "원고 생성하기"}
             </button>
 
-            {error ? (
+            {error && (
               <div className="mt-5 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-base text-rose-700">
                 {error}
               </div>
-            ) : null}
+            )}
           </div>
         </section>
 
@@ -451,14 +384,12 @@ export default function Page() {
             <div className="grid gap-3">
               {titleList.map((title, idx) => {
                 const isCopied = copiedTitleIndex === idx;
-
                 return (
                   <div
                     key={`${idx}-${title}`}
                     className="flex items-center justify-between gap-4 rounded-xl border border-rose-200 bg-white px-4 py-3"
                   >
                     <div className="text-lg text-slate-900">{title}</div>
-
                     <button
                       className={[
                         "rounded-lg px-4 py-2 text-base font-semibold transition",
@@ -486,7 +417,6 @@ export default function Page() {
         <section className="mt-6 rounded-2xl bg-white/80 p-6 shadow-sm ring-1 ring-rose-200 backdrop-blur">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-2xl font-bold text-slate-900">블링이 생성 원고 (본문)</h2>
-
             <button
               className={[
                 "rounded-lg px-4 py-2 text-base font-semibold transition",
