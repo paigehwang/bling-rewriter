@@ -304,7 +304,7 @@ ${sourceContent}
       let retryMsg = "";
       if (attempt > 0) {
         retryMsg = "\n\n[수정 요청]";
-        retryMsg += " 1. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (공백 제외 최소 1000자)";
+        retryMsg += " 1. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (최소 1000자)";
         retryMsg += " 2. 소제목은 반드시 3개 또는 4개가 있어야 합니다.";
         retryMsg += " 3. 키워드 '" + keyword1 + "'를 제목과 본문에 규칙대로 넣으세요.";
         retryMsg += " 4. 도입부에 번호(1.) 붙이지 마세요.";
@@ -383,4 +383,6 @@ ${sourceContent}
 
   } catch (err: any) {
     console.error("🔥 Error:", err?.message);
-    return NextResponse.json({ ok: false, error: err?.
+    return NextResponse.json({ ok: false, error: err?.message }, { status: 500 });
+  }
+}
