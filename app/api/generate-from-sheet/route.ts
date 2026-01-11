@@ -81,7 +81,13 @@ function getRegionHint(addr: string) {
 function extractSeoTitles(raw: string) {
   const m = raw.match(/<<SEO_TITLES>>\s*([\s\S]*?)\s*<<BODY>>/);
   const block = (m?.[1] ?? "").trim();
-  const lines = block.split("\n").map((x) => x.trim()).filter(Boolean);
+  const lines = block
+    .split("\n")
+    .map((x) => x.trim())
+    // ✅ [수정됨] 제목 앞의 기호(*, -, •, 숫자.) 제거 정규식
+    .map((x) => x.replace(/^[*•-]\s*/, ""))   // 글머리 기호 제거
+    .map((x) => x.replace(/^\d+[\.\)]\s*/, "")) // 숫자(1. 2.) 제거
+    .filter(Boolean);
   return lines.slice(0, 3);
 }
 
@@ -383,6 +389,6 @@ ${sourceContent}
 
   } catch (err: any) {
     console.error("🔥 Error:", err?.message);
-    return NextResponse.json({ ok: false, error: err?.message }, { status: 500 });
+    return NextResponse.json({ ok: false, error: err?.message || "Unknown error" }, { status: 500 });
   }
 }
