@@ -84,9 +84,10 @@ function extractSeoTitles(raw: string) {
   const lines = block
     .split("\n")
     .map((x) => x.trim())
-    // ✅ [수정됨] 제목 앞의 기호(*, -, •, 숫자.) 제거 정규식
-    .map((x) => x.replace(/^[*•-]\s*/, ""))   // 글머리 기호 제거
-    .map((x) => x.replace(/^\d+[\.\)]\s*/, "")) // 숫자(1. 2.) 제거
+    // ✅ [강력 수정] 제목 앞의 모든 기호(*, -, •, 숫자, 점) 박멸
+    .map((x) => x.replace(/^[\s\*\-\•\d\.\)]+/, "")) 
+    // 혹시 글자 중간에 **가 섞여있을 수도 있으니 한번 더 제거
+    .map((x) => x.replaceAll("**", "").replaceAll("*", "")) 
     .filter(Boolean);
   return lines.slice(0, 3);
 }
@@ -342,7 +343,6 @@ ${sourceContent}
       const badIntro = raw.slice(0, 100).includes("오늘") && raw.slice(0, 100).includes("준비");
       const numberedIntro = raw.includes("<<BODY>>") && extractBody(raw).trim().startsWith("1.");
       
-      // ✅ [깊이 검증] 본문 길이가 너무 짧으면 실패 처리 (약 600자 미만이면 재시도)
       const isTooShort = bodyText.length < 600; 
 
       if (okTok && okTitles && okBody && hasCenterName && hasTel && !badIntro && !numberedIntro && !isTooShort) {
