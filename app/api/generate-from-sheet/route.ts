@@ -121,7 +121,7 @@ function reduceKeywordToMax(body: string, keyword: string, max: number) {
 }
 
 /**
- * [강력 보정] 키워드 개수가 부족하면 하단에 문구를 추가하여 강제로 맞춤
+ * [강력 보정] 키워드 부족 시 하단 추가
  */
 function ensureKeywordCount(raw: string, keyword: string, tel: string, isRecruitment: boolean, min = 2, max = 3) {
   const k = keyword.trim();
@@ -215,55 +215,62 @@ export async function POST(req: Request) {
     const voiceBlock = isRecruitment
       ? `
 [화자: ${centerName} 채용 담당자]
-- 구직 중인 요양보호사 선생님들에게 "일하고 싶은 센터"라는 인상을 줍니다.
-- 존중하는 태도(해요체)와 공감 능력을 발휘하세요.
+- 구직 중인 요양보호사 선생님들에게 깊이 있는 정보를 제공합니다.
+- 단순 공지가 아니라, 우리 센터의 철학과 장점을 구체적으로 설명합니다.
 `.trim()
       : `
-[화자: ${centerName} 상담 센터장]
-- 보호자에게 친절한 상담사가 공감하며 따뜻하게 말하듯 씁니다.
-- 딱딱한 설명문이 아닌, 사람 냄새 나는 말투를 씁니다.
+[화자: ${centerName} 전문 상담 센터장]
+- 보호자에게 단순 위로를 넘어 '전문적인 해결책'을 제시합니다.
+- 글의 호흡을 길게 가져가며, 상세하고 친절하게 설명하는 말투를 씁니다.
 `.trim();
 
     const rewriteRule = isRecruitment
       ? `
-[리라이팅 규칙 - 채용/구인 모드]
-1) **대상**: 구직자/요양보호사 (보호자 대상 X)
-2) **도입부**: "일자리 찾기 힘드시죠?" 등 고충에 공감하며 시작. (기계적 요약 금지)
-3) **본문**: 센터의 좋은 근무 환경, 체계적인 시스템을 강조. (타 지역명은 ${centerName}(${regionHint})로 변경)
-4) **결론**: 상담/면접 유도 (전화번호 필수)
+[리라이팅 규칙 - 채용/구인 모드 (상세하게 작성할 것)]
+1) **분량**: 최소 1,000자 이상 작성하세요. 내용을 풍성하게 늘리세요.
+2) **구성**: 소제목 3개~4개를 반드시 포함하세요.
+3) **내용 심화**: 
+   - 단순한 "구인합니다"가 아니라, 왜 우리 센터가 좋은지 구체적인 예시(교육 시스템, 복지, 분위기 등)를 들어 문단을 길게 서술하세요.
+   - "선생님이 존중받는 곳"이라는 점을 강조하며 감정적인 호소력을 더하세요.
+4) **금지**: 짧고 딱딱한 공지사항 스타일 금지. 에세이처럼 술술 읽히게 쓰세요.
 `.trim()
       : `
-[리라이팅 규칙 - 보호자 상담 모드]
-1) **대상**: 보호자/가족 (구직자 대상 X)
-2) **도입부**: 보호자의 걱정에 공감하며 자연스럽게 시작. (기계적 요약 금지)
-3) **본문**: 어르신을 잘 모신다는 신뢰/케어 강점 강조. (타 지역명은 ${centerName}(${regionHint})로 변경)
-4) **결론**: 등급/입소 상담 유도 (전화번호 필수)
+[리라이팅 규칙 - 보호자 상담 모드 (상세하게 작성할 것)]
+1) **분량**: 최소 1,000자 이상 작성하세요. 내용을 풍성하게 늘리세요.
+2) **구성**: 소제목 3개~4개를 반드시 포함하세요.
+3) **내용 심화**: 
+   - 원본 내용을 단순히 요약하지 말고, 살을 붙여서 확장하세요.
+   - 예를 들어 '케어'라고만 하지 말고, '식사 보조부터 말벗, 병원 동행, 인지 활동 프로그램'처럼 구체적인 서비스 항목을 나열하며 자세히 설명하세요.
+   - 보호자의 걱정을 하나하나 짚어주며 안심시키세요.
 `.trim();
 
     const seoRule = `
 [SEO 필수 규칙 (어길 시 0점 처리)]
-1) **SEO 제목**: 출력하는 3개의 제목 모두에 목표 키워드 '${keyword1}'를 토씨 하나 틀리지 않고 그대로 포함하세요. (동의어/변형 금지)
+1) **SEO 제목**: 출력하는 3개의 제목 모두에 목표 키워드 '${keyword1}'를 토씨 하나 틀리지 않고 그대로 포함하세요.
 2) **본문 키워드**: 본문 내용 중에 목표 키워드 '${keyword1}'가 정확히 2회~3회 등장해야 합니다.
 3) **소제목**: 소제목 4개 중 2개 이상에 ${centerName} 또는 ${regionHint}를 포함하세요.
 `.trim();
 
-    // ✅ [수정됨] 예시 텍스트에서 괄호 설명 모두 제거
     const formatRule = `
 [출력 형식]
 <<SEO_TITLES>>
 (제목 3개)
 <<BODY>>
-(자연스러운 도입부 줄글)
+(도입부: 3~4문장의 충분한 길이로 작성, 번호 붙이지 말 것)
 
-1. 첫번째 소제목
-(본문 내용)
+1. {소제목 1}
+(본문: 최소 4~5문장 이상 길게 작성)
 
-2. 두번째 소제목
-(본문 내용)
+2. {소제목 2}
+(본문: 최소 4~5문장 이상 길게 작성)
+
+3. {소제목 3}
+(본문: 최소 4~5문장 이상 길게 작성)
+
+4. {소제목 4 (선택)}
+(본문)
+
 <<END>>
-
-- 도입부(인트로)에는 번호를 붙이지 않습니다.
-- 소제목부터 "1."을 붙여서 시작합니다.
 `.trim();
 
     const finalPrompt = `
@@ -289,7 +296,7 @@ ${formatRule}
 ${sourceContent}
 `.trim();
 
-    /* 4-1) Generate Loop */
+    /* 4-1) Generate Loop (깊이/길이 검증 추가) */
     let raw = "";
     let bestResult = ""; 
 
@@ -297,10 +304,10 @@ ${sourceContent}
       let retryMsg = "";
       if (attempt > 0) {
         retryMsg = "\n\n[수정 요청]";
-        retryMsg += " 1. SEO 제목 3개 모두에 키워드 '" + keyword1 + "'를 반드시 넣으세요.";
-        retryMsg += " 2. 도입부(맨 처음)에 숫자 1.을 붙이지 마세요. 줄글로 시작하세요.";
-        retryMsg += " 3. 결론에 전화번호(" + tel + ")를 넣으세요.";
-        retryMsg += " 4. 센터명에 따옴표(')나 괄호()를 절대 붙이지 마세요.";
+        retryMsg += " 1. 글이 너무 짧습니다. 문단을 더 구체적으로 길게 늘려 쓰세요. (공백 제외 최소 1000자)";
+        retryMsg += " 2. 소제목은 반드시 3개 또는 4개가 있어야 합니다.";
+        retryMsg += " 3. 키워드 '" + keyword1 + "'를 제목과 본문에 규칙대로 넣으세요.";
+        retryMsg += " 4. 도입부에 번호(1.) 붙이지 마세요.";
       }
 
       const result = await model.generateContent(finalPrompt + retryMsg);
@@ -308,18 +315,11 @@ ${sourceContent}
       raw = stripMarkdown(result.response.text() || "");
       raw = raw.replace(/\b(AI|자동\s?생성|챗봇)\b/gi, "").trim();
       
-      // ✅ [강력 필터] 센터명 정규화 (따옴표, 괄호 제거)
       raw = raw.replace(/\[\s*센터\s*정보\s*\]/g, `${centerName}`);
-      
-      // 1. 따옴표 제거
       const quotedCenter = new RegExp(`'${centerName}'`, "g");
       raw = raw.replace(quotedCenter, centerName);
-
-      // 2. 괄호 제거: (케어링 부산점) -> 케어링 부산점
       const parenCenter = new RegExp(`\\(${centerName}\\)`, "g");
       raw = raw.replace(parenCenter, centerName);
-
-      // 3. 기계적 텍스트 (본문) 같은거 제거
       raw = raw.replace(/\(본문\)/g, "").replace(/\(내용\)/g, "");
 
       bestResult = raw;
@@ -329,17 +329,17 @@ ${sourceContent}
 
       const okTok = raw.includes("<<SEO_TITLES>>") && raw.includes("<<BODY>>");
       const okTitles = titles.length === 3 && titles.every((t) => t.includes(keyword1));
-      
       const bodyCnt = countOccurrences(bodyText, keyword1);
       const okBody = bodyCnt >= 2 && bodyCnt <= 4; 
-      
       const hasCenterName = raw.includes(centerName);
       const hasTel = raw.includes(tel);
-      
       const badIntro = raw.slice(0, 100).includes("오늘") && raw.slice(0, 100).includes("준비");
       const numberedIntro = raw.includes("<<BODY>>") && extractBody(raw).trim().startsWith("1.");
+      
+      // ✅ [깊이 검증] 본문 길이가 너무 짧으면 실패 처리 (약 600자 미만이면 재시도)
+      const isTooShort = bodyText.length < 600; 
 
-      if (okTok && okTitles && okBody && hasCenterName && hasTel && !badIntro && !numberedIntro) {
+      if (okTok && okTitles && okBody && hasCenterName && hasTel && !badIntro && !numberedIntro && !isTooShort) {
         break; 
       }
     }
@@ -383,6 +383,4 @@ ${sourceContent}
 
   } catch (err: any) {
     console.error("🔥 Error:", err?.message);
-    return NextResponse.json({ ok: false, error: err?.message }, { status: 500 });
-  }
-}
+    return NextResponse.json({ ok: false, error: err?.
